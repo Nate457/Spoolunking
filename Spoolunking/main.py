@@ -23,20 +23,30 @@ pygame.init()
 
 # Game Modules and needed imports
 import Assets_Dict.Images as Image
-from Saves.Saved_Area import Loaded
 from Globals import *
 from Spritesheet import SpriteSheet
 import math
 import random
-from Saves.Saved_Status import *
-from Saves.Saved_Area import *
-from Saves.Saved_Items import *
+import asyncio
 
-# Loads Save Files From Previous Play Throughs
-if Loaded:
-    from Saves.Saved_Area import *
+# In-memory save state — no file I/O (web/WASM compatible)
+Loaded     = False
+e_map      = [[0 for _ in range(65)] for _ in range(35)]
+i_map      = [[0 for _ in range(65)] for _ in range(35)]
+w_map      = [[0 for _ in range(65)] for _ in range(35)]
+Energy     = 5
+Max_Energy = 5
+Health     = 15
+Max_Health = 15
+Attack     = 2
+Armor      = 'naked'
+Weapon     = 'none'
+Speed      = 2.1
+Sight      = 1.3
+Position   = (3, 3)
+item_list  = []
 
-saved_loaded = False # Checks if there is a save file loaded
+saved_loaded = False
 
 
 # Generic Class for In-Game Objects
@@ -2850,94 +2860,59 @@ def empty_all():
 # "Main Code"
 if __name__ == "__main__":
 
-    # Creates a Function to Save Player Progress
-
-    # Saves Players Current Progress (All enemy and player states and map state)
+    # Saves current game state into module-level globals (in-memory, web-compatible)
     def save_game():
-        global thred
-        global saved_loaded
+        global thred, saved_loaded, Loaded
+        global e_map, i_map, w_map
+        global item_list
+        global Energy, Max_Energy, Health, Max_Health, Attack, Armor, Weapon, Speed, Sight, Position
+
         saved_loaded = True
-        # File I/O is unavailable in WebAssembly — wrap everything in try/except
-        try:
-            Layout = open("Saves/Saved_Area.py", "w")
-            Collection = open("Saves/Saved_Items.py", "w")
-            Stats = open("Saves/Saved_Status.py", "w")
-            saved_emap = [[0 for i in range(len(Layers.map[1]))] for j in range(len(Layers.map))]
-            saved_imap = [[0 for i in range(len(Layers.map[1]))] for j in range(len(Layers.map))]
+        Loaded = True  # mark that a save exists for this session
 
-            for enemy in all_enemies:
+        saved_emap = [[0 for _ in range(len(Layers.map[0]))] for _ in range(len(Layers.map))]
+        saved_imap = [[0 for _ in range(len(Layers.map[0]))] for _ in range(len(Layers.map))]
+
+        for enemy in all_enemies:
+            try:
+                r, c = enemy.rect.centery // 32, enemy.rect.centerx // 32
                 if enemy.item.type == "Wine":
-                    saved_emap[enemy.rect.centery // 32][enemy.rect.centerx // 32] = (
-                        "W", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight)
+                    saved_emap[r][c] = ("W", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight)
                 elif enemy.item.type == "Cat_Claw":
-                    saved_emap[enemy.rect.centery // 32][enemy.rect.centerx // 32] = (
-                        "C", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight)
+                    saved_emap[r][c] = ("C", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight)
                 elif enemy.item.type == "Slime":
-                    saved_emap[enemy.rect.centery // 32][enemy.rect.centerx // 32] = (
-                        "S", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight, enemy.color, enemy.size)
-            for item in all_items:
+                    saved_emap[r][c] = ("S", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight, enemy.color, enemy.size)
+            except Exception:
+                pass
+
+        for item in all_items:
+            try:
+                r, c = item.rect.centery // 32, item.rect.centerx // 32
                 if item.type == "Wine":
-                    saved_imap[item.rect.centery // 32][item.rect.centerx // 32] += 10
-                if item.type == "Cat_Claw":
-                    saved_imap[item.rect.centery // 32][item.rect.centerx // 32] += 1000
-                if item.type == "Slime":
-                    saved_imap[item.rect.centery // 32][item.rect.centerx // 32] += 100000
-            Layout.write("Loaded = True" + "\n" + "e_map = " + str(saved_emap) + "\n" + "i_map = " + str(
-                saved_imap) + "\n" + "w_map = " + str(Layers.map))
+                    saved_imap[r][c] += 10
+                elif item.type == "Cat_Claw":
+                    saved_imap[r][c] += 1000
+                elif item.type == "Slime":
+                    saved_imap[r][c] += 100000
+            except Exception:
+                pass
 
-            global e_map
-            global i_map
-            global w_map
-            e_map = saved_emap
-            i_map = saved_imap
-            w_map = Layers.map
+        e_map = saved_emap
+        i_map = saved_imap
+        w_map = [row[:] for row in Layers.map]
+        item_list = list(thred.inv)
 
-            Layout.close()
-
-            items = []
-            for item in thred.inv:
-                items.append(item)
-            Collection.write("item_list = " + str(items))
-            Collection.close()
-
-            global item_list
-            item_list = items
-
-            player_pos = (thred.rect.centerx // 32, thred.rect.centery // 32)
-            Stats.write("Energy = " + str(thred.energy) + "\n" +
-                        "Max_Energy = " + str(thred.max_energy) + "\n" +
-                        "Health = " + str(thred.health) + "\n" +
-                        "Max_Health = " + str(thred.max_health) + "\n" +
-                        "Attack = " + str(thred.attack) + "\n" +
-                        "Armor = " + "'" + thred.armor + "'" + "\n" +
-                        "Weapon = " + "'" + thred.hand + "'" + "\n" +
-                        "Speed = " + str(thred.speed) + "\n" +
-                        "Sight = " + str(thred.sight) + "\n" +
-                        "Position = " + str(player_pos) + "\n")
-            Stats.close()
-
-            global Energy
-            global Max_Energy
-            global Health
-            global Max_Health
-            global Armor
-            global Attack
-            global Weapon
-            global Speed
-            global Sight
-            global Position
-            Energy = thred.energy
-            Max_Energy = thred.max_energy
-            Health = thred.health
-            Max_Health = thred.max_health
-            Attack = thred.attack
-            Armor = thred.armor
-            Weapon = thred.hand
-            Speed = thred.speed
-            Sight = thred.sight
-            Position = player_pos
-        except Exception:
-            pass  # File writes not available in WebAssembly — silently skip
+        player_pos = (thred.rect.centerx // 32, thred.rect.centery // 32)
+        Energy     = thred.energy
+        Max_Energy = thred.max_energy
+        Health     = thred.health
+        Max_Health = thred.max_health
+        Attack     = thred.attack
+        Armor      = thred.armor
+        Weapon     = thred.hand
+        Speed      = thred.speed
+        Sight      = thred.sight
+        Position   = player_pos
 
     # Loads save file (Last point saved)
     def load_save():
@@ -3093,7 +3068,7 @@ if __name__ == "__main__":
     clock = pygame.time.Clock()
 
     # Creates the first screen layout
-    def loadscreen():
+    async def loadscreen():
         global Room
         global screen
         title = Background(90, 10, Image.title)
@@ -3168,11 +3143,12 @@ if __name__ == "__main__":
             pygame.display.update()
 
             # Sets Frame Rate
+            await asyncio.sleep(0)
             clock.tick(60)
 
 
     # Creates the tutorial screen layout
-    def tutorial():
+    async def tutorial():
         global Room
         global screen
         tutorial_back = Background(0, 0, Image.tutorial)
@@ -3224,11 +3200,12 @@ if __name__ == "__main__":
             pygame.display.update()
 
             # Sets Frame Rate
+            await asyncio.sleep(0)
             clock.tick(60)
 
 
     # Creates the game layout and update processes
-    def game():
+    async def game():
         global Room
         global screen
         global thred
@@ -3246,7 +3223,7 @@ if __name__ == "__main__":
 
                     # If the Esc key is pressed, then exits the loop
                     if event.key == K_ESCAPE:
-                        pause()
+                        await pause()
 
                 elif event.type == QUIT:
                     # Check for QUIT event. If QUIT, stops then program
@@ -3257,7 +3234,7 @@ if __name__ == "__main__":
 
                     if event.button == 1:
                         if thred.inv_button.file == 2:
-                            inventory()
+                            await inventory()
                         else:
                             if ((thred.hand == "none") and (thred.reload >= 2) and (thred.state != 1)):
                                 thred.state = 5
@@ -3278,12 +3255,12 @@ if __name__ == "__main__":
             # Check player death
             if player_dead:
                 player_dead = False
-                game_over_screen()
+                await game_over_screen()
                 break
 
             # Check level complete (all enemies cleared)
             if enemies_started and len(all_enemies) == 0:
-                level_complete_screen()
+                await level_complete_screen()
                 enemies_started = False
                 break
 
@@ -3297,11 +3274,12 @@ if __name__ == "__main__":
             pygame.display.update()
 
             # Sets Frame Rate
+            await asyncio.sleep(0)
             clock.tick(20)
 
 
     # Creates the pause screen layout
-    def pause():
+    async def pause():
         global Last_Room
         global Room
         global screen
@@ -3350,11 +3328,12 @@ if __name__ == "__main__":
             pygame.display.update()
 
             # Sets Frame Rate
+            await asyncio.sleep(0)
             clock.tick(60)
 
 
     # Creates the inventory layout
-    def inventory():
+    async def inventory():
         global Room
         global screen
         inv_back = Background(0, 0, Image.inventory)
@@ -3579,6 +3558,7 @@ if __name__ == "__main__":
             pygame.display.update()
 
             # Sets Frame Rate
+            await asyncio.sleep(0)
             clock.tick(60)
 
 
@@ -3630,7 +3610,7 @@ if __name__ == "__main__":
         elif skill_id == "thread_sense":
             thred.thread_mult = getattr(thred, 'thread_mult', 1.0) + 0.5
 
-    def skill_tree_screen():
+    async def skill_tree_screen():
         global Room, screen, thred
         pygame.font.init()
         font_title = pygame.font.Font(None, 14)
@@ -3753,9 +3733,10 @@ if __name__ == "__main__":
             scaled = pygame.transform.scale(cam, (sw, sh))
             screen.blit(scaled, (0, 0))
             pygame.display.flip()
+            await asyncio.sleep(0)
             clock.tick(30)
 
-    def level_complete_screen():
+    async def level_complete_screen():
         global Room, current_level, initial_enemy_count
         pygame.font.init()
         font_title = pygame.font.Font(None, 48)
@@ -3785,14 +3766,15 @@ if __name__ == "__main__":
                 ps = font_sm.render("Click or press any key to continue", True, (150,200,150))
             screen.blit(ps, (sw//2 - ps.get_width()//2, sh*3//4))
             pygame.display.flip()
+            await asyncio.sleep(0)
             clock.tick(30)
 
         if current_level < MAX_LEVEL:
-            skill_tree_screen()
+            await skill_tree_screen()
             current_level += 1
             load_level()
         else:
-            victory_screen()
+            await victory_screen()
             current_level = 1
             Room = -1
             all_backgrounds.empty(); all_buttons.empty(); all_items.empty()
@@ -3801,9 +3783,9 @@ if __name__ == "__main__":
             all_text.empty(); all_lights.empty(); all_blocks.empty()
             all_temps.empty(); all_tempsback.empty(); all_numbers.empty()
             Layers.map = [[0 for i in range(65)] for j in range(35)]
-            loadscreen()
+            await loadscreen()
 
-    def game_over_screen():
+    async def game_over_screen():
         global Room, current_level, player_dead
         pygame.font.init()
         font_title = pygame.font.Font(None, 52)
@@ -3835,6 +3817,7 @@ if __name__ == "__main__":
             ps = font_sm.render("Press ENTER / click to return to menu", True, (140,140,170))
             screen.blit(ps, (sw//2 - ps.get_width()//2, sh*3//4))
             pygame.display.flip()
+            await asyncio.sleep(0)
             clock.tick(30)
         # Reset and go back to title
         current_level = 1
@@ -3846,9 +3829,9 @@ if __name__ == "__main__":
         all_temps.empty(); all_tempsback.empty(); all_numbers.empty()
         Layers.map = [[0 for i in range(65)] for j in range(35)]
         Room = -1
-        loadscreen()
+        await loadscreen()
 
-    def victory_screen():
+    async def victory_screen():
         global screen
         pygame.font.init()
         font_title = pygame.font.Font(None, 64)
@@ -3881,6 +3864,7 @@ if __name__ == "__main__":
             ps = font_sm.render("Click or press any key to return to menu", True, (150,150,190))
             screen.blit(ps, (sw//2 - ps.get_width()//2, sh*3//4 + 20))
             pygame.display.flip()
+            await asyncio.sleep(0)
             clock.tick(30)
 
     def load_level():
@@ -3937,28 +3921,29 @@ if __name__ == "__main__":
 
     # Creates Main Loop for the Game
     # Uses Room Codes To Dictate Room Loops
-    while Running:
-        global screen
-        global Room
+    async def _main():
+        global Running, screen, Room
+        while Running:
+            if Room == 0:
+                Running = False
+                break
+            if Room == -1:
+                await loadscreen()
+            if Room == 1:
+                await tutorial()
+            if Room == 2:
+                await game()
 
-        if Room == 0:
-            Running = False
-            break
-        if Room == -1:
-            loadscreen()
-        if Room == 1:
-            tutorial()
-        if Room == 2:
-            game()
+        # Removes Sprites from Screen
+        screen.fill((0, 0, 0))
+        pygame.display.flip()
 
-    # Removes Sprites from Screen
-    screen.fill((0, 0, 0))
-    pygame.display.flip()
+        # if no current save files uses current play through to make one
+        if not Loaded:
+            try:
+                save_game()
+            except Exception:
+                pass
 
-    # if no current save files uses current play through to make one
-    if not Loaded:
-        try:
-            save_game()
-        except Exception:
-            pass
+    asyncio.run(_main())
 

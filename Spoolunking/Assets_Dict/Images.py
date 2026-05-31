@@ -49,7 +49,7 @@ Energybar = ["Images/Sprites/Thred/EnergyBar1.png", "Images/Sprites/Thred/Energy
 
 # Items
 slime =["Images/Sprites/Slime/Slime0.png", "Images/Sprites/Slime/Slime1.png", "Images/Sprites/Slime/Slime2.png"]
-winedrop =["Images/Sprites/WineDrop/Winedrop0.png", "Images/Sprites/WineDrop/Winedrop1.png", "Images/Sprites/WineDrop/WineDrop2.png"]
+winedrop =["Images/Sprites/WineDrop/Winedrop0.png", "Images/Sprites/WineDrop/Winedrop1.png", "Images/Sprites/WineDrop/Winedrop2.png"]
 claw = ["Images/Sprites/Cat_Claw/Claw0.png", "Images/Sprites/Cat_Claw/Claw1.png", "Images/Sprites/Cat_Claw/Claw2.png"]
 
 ball = "Images/Sprites/Equipment/Ball.png"

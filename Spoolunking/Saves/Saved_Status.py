@@ -1,10 +1,10 @@
 Energy = 5
 Max_Energy = 5
-Health = 15
+Health = 14.22500000000007
 Max_Health = 15
 Attack = 2
 Armor = 'naked'
 Weapon = 'none'
 Speed = 2.1
 Sight = 1.3
-Position = (3, 3)
+Position = (32, 19)

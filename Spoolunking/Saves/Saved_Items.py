@@ -1,1 +1,1 @@
-item_list = []
+item_list = ['Green', 'Ball', 'Cat_Claw']
