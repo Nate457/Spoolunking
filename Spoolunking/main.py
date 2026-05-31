@@ -31,9 +31,6 @@ import random
 from Saves.Saved_Status import *
 from Saves.Saved_Area import *
 from Saves.Saved_Items import *
-import map_level1 as _lvl1
-import map_level2 as _lvl2
-import map_level3 as _lvl3
 
 # Loads Save Files From Previous Play Throughs
 if Loaded:
@@ -398,7 +395,7 @@ def update_screen_game(playing, title):
     :type playing: Bool
     :type title: Bool
     """
-    camera = pygame.surface.Surface((SCREEN_WIDTH / Layers.zoom, SCREEN_HEIGHT / Layers.zoom))
+    camera = pygame.surface.Surface((SCREEN_WIDTH // Layers.zoom, SCREEN_HEIGHT // Layers.zoom))
     camera.fill((250, 250, 250))
     if playing:
         update_map()
@@ -3038,12 +3035,18 @@ if __name__ == "__main__":
         all_buttons.add(thred.inv_button)
         all_mains.add(thred)
 
-        if current_level == 2:
-            map_grid = _lvl2.map
-        elif current_level == 3:
-            map_grid = _lvl3.map
-        else:
-            map_grid = _lvl1.map
+        try:
+            if current_level == 2:
+                import map_level2
+                map_grid = map_level2.map
+            elif current_level == 3:
+                import map_level3
+                map_grid = map_level3.map
+            else:
+                import map_level1
+                map_grid = map_level1.map
+        except Exception:
+            from map import map as map_grid  # fallback to original map
         for row in range(len(map_grid)):
             for column in range(len(map_grid[row])):
                 tile = map_grid[row][column]
