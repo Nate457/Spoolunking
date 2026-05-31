@@ -2860,83 +2860,87 @@ if __name__ == "__main__":
         global thred
         global saved_loaded
         saved_loaded = True
-        Layout = open("Saves/Saved_Area.py", "w")
-        Collection = open("Saves/Saved_Items.py", "w")
-        Stats = open("Saves/Saved_Status.py", "w")
-        saved_emap = [[0 for i in range(len(Layers.map[1]))] for j in range(len(Layers.map))]
-        saved_imap = [[0 for i in range(len(Layers.map[1]))] for j in range(len(Layers.map))]
+        # File I/O is unavailable in WebAssembly — wrap everything in try/except
+        try:
+            Layout = open("Saves/Saved_Area.py", "w")
+            Collection = open("Saves/Saved_Items.py", "w")
+            Stats = open("Saves/Saved_Status.py", "w")
+            saved_emap = [[0 for i in range(len(Layers.map[1]))] for j in range(len(Layers.map))]
+            saved_imap = [[0 for i in range(len(Layers.map[1]))] for j in range(len(Layers.map))]
 
-        for enemy in all_enemies:
-            if enemy.item.type == "Wine":
-                saved_emap[enemy.rect.centery // 32][enemy.rect.centerx // 32] = (
-                    "W", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight)
-            elif enemy.item.type == "Cat_Claw":
-                saved_emap[enemy.rect.centery // 32][enemy.rect.centerx // 32] = (
-                    "C", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight)
-            elif enemy.item.type == "Slime":
-                saved_emap[enemy.rect.centery // 32][enemy.rect.centerx // 32] = (
-                    "S", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight, enemy.color, enemy.size)
-        for item in all_items:
-            if item.type == "Wine":
-                saved_imap[item.rect.centery // 32][item.rect.centerx // 32] += 10
-            if item.type == "Cat_Claw":
-                saved_imap[item.rect.centery // 32][item.rect.centerx // 32] += 1000
-            if item.type == "Slime":
-                saved_imap[item.rect.centery // 32][item.rect.centerx // 32] += 100000
-        Layout.write("Loaded = True" + "\n" + "e_map = " + str(saved_emap) + "\n" + "i_map = " + str(
-            saved_imap) + "\n" + "w_map = " + str(Layers.map))
+            for enemy in all_enemies:
+                if enemy.item.type == "Wine":
+                    saved_emap[enemy.rect.centery // 32][enemy.rect.centerx // 32] = (
+                        "W", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight)
+                elif enemy.item.type == "Cat_Claw":
+                    saved_emap[enemy.rect.centery // 32][enemy.rect.centerx // 32] = (
+                        "C", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight)
+                elif enemy.item.type == "Slime":
+                    saved_emap[enemy.rect.centery // 32][enemy.rect.centerx // 32] = (
+                        "S", enemy.max_health, enemy.health, enemy.attack, enemy.speed, enemy.sight, enemy.color, enemy.size)
+            for item in all_items:
+                if item.type == "Wine":
+                    saved_imap[item.rect.centery // 32][item.rect.centerx // 32] += 10
+                if item.type == "Cat_Claw":
+                    saved_imap[item.rect.centery // 32][item.rect.centerx // 32] += 1000
+                if item.type == "Slime":
+                    saved_imap[item.rect.centery // 32][item.rect.centerx // 32] += 100000
+            Layout.write("Loaded = True" + "\n" + "e_map = " + str(saved_emap) + "\n" + "i_map = " + str(
+                saved_imap) + "\n" + "w_map = " + str(Layers.map))
 
-        global e_map
-        global i_map
-        global w_map
-        e_map = saved_emap
-        i_map = saved_imap
-        w_map = Layers.map
+            global e_map
+            global i_map
+            global w_map
+            e_map = saved_emap
+            i_map = saved_imap
+            w_map = Layers.map
 
-        Layout.close()
+            Layout.close()
 
-        items = []
-        for item in thred.inv:
-            items.append(item)
-        Collection.write("item_list = " + str(items))
-        Collection.close()
+            items = []
+            for item in thred.inv:
+                items.append(item)
+            Collection.write("item_list = " + str(items))
+            Collection.close()
 
-        global item_list
-        item_list = items
+            global item_list
+            item_list = items
 
-        player_pos = (thred.rect.centerx // 32, thred.rect.centery // 32)
-        Stats.write("Energy = " + str(thred.energy) + "\n" +
-                    "Max_Energy = " + str(thred.max_energy) + "\n" +
-                    "Health = " + str(thred.health) + "\n" +
-                    "Max_Health = " + str(thred.max_health) + "\n" +
-                    "Attack = " + str(thred.attack) + "\n" +
-                    "Armor = " + "'" + thred.armor + "'" + "\n" +
-                    "Weapon = " + "'" + thred.hand + "'" + "\n" +
-                    "Speed = " + str(thred.speed) + "\n" +
-                    "Sight = " + str(thred.sight) + "\n" +
-                    "Position = " + str(player_pos) + "\n")
-        Stats.close()
+            player_pos = (thred.rect.centerx // 32, thred.rect.centery // 32)
+            Stats.write("Energy = " + str(thred.energy) + "\n" +
+                        "Max_Energy = " + str(thred.max_energy) + "\n" +
+                        "Health = " + str(thred.health) + "\n" +
+                        "Max_Health = " + str(thred.max_health) + "\n" +
+                        "Attack = " + str(thred.attack) + "\n" +
+                        "Armor = " + "'" + thred.armor + "'" + "\n" +
+                        "Weapon = " + "'" + thred.hand + "'" + "\n" +
+                        "Speed = " + str(thred.speed) + "\n" +
+                        "Sight = " + str(thred.sight) + "\n" +
+                        "Position = " + str(player_pos) + "\n")
+            Stats.close()
 
-        global Energy
-        global Max_Energy
-        global Health
-        global Max_Health
-        global Armor
-        global Attack
-        global Weapon
-        global Speed
-        global Sight
-        global Position
-        Energy = thred.energy
-        Max_Energy = thred.max_energy
-        Health = thred.health
-        Max_Health = thred.max_health
-        Attack = thred.attack
-        Armor = thred.armor
-        Weapon = thred.hand
-        Speed = thred.speed
-        Sight = thred.sight
-        Position = player_pos
+            global Energy
+            global Max_Energy
+            global Health
+            global Max_Health
+            global Armor
+            global Attack
+            global Weapon
+            global Speed
+            global Sight
+            global Position
+            Energy = thred.energy
+            Max_Energy = thred.max_energy
+            Health = thred.health
+            Max_Health = thred.max_health
+            Attack = thred.attack
+            Armor = thred.armor
+            Weapon = thred.hand
+            Speed = thred.speed
+            Sight = thred.sight
+            Position = player_pos
+        except Exception:
+            pass  # File writes not available in WebAssembly — silently skip
 
     # Loads save file (Last point saved)
     def load_save():
@@ -2956,7 +2960,7 @@ if __name__ == "__main__":
         global Position
         global item_list
         thred = Player(0, 0, "A_0", 1, 1, 1, 1, 1, 1)
-        inv_button = Buttons(430, -5, Image.backpack[0], Image.backpack[1])
+        inv_button = Buttons(390, -5, Image.backpack[0], Image.backpack[1])
         thred.inv_button = inv_button
         all_buttons.add(thred.inv_button)
         all_mains.add(thred)
@@ -3029,7 +3033,7 @@ if __name__ == "__main__":
     def new_file():
         global thred, current_level
         thred = Player(80, 80, "A_0", 5, 15, 2, 1, 2.1, 1.3)
-        inv_button = Buttons(430, -5, Image.backpack[0], Image.backpack[1])
+        inv_button = Buttons(390, -5, Image.backpack[0], Image.backpack[1])
         thred.inv_button = inv_button
         all_buttons.add(thred.inv_button)
         all_mains.add(thred)
@@ -3950,5 +3954,8 @@ if __name__ == "__main__":
 
     # if no current save files uses current play through to make one
     if not Loaded:
-        save_game()
+        try:
+            save_game()
+        except Exception:
+            pass
 
