@@ -15,3 +15,9 @@ Running = True
 
 # Sets Room Code
 Room = -1
+
+# ── Expansion globals ─────────────────────────────────────────────────
+current_level = 1
+MAX_LEVEL = 3
+player_dead = False
+initial_enemy_count = 0

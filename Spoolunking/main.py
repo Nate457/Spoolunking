@@ -27,9 +27,13 @@ from Saves.Saved_Area import Loaded
 from Globals import *
 from Spritesheet import SpriteSheet
 import math
+import random
 from Saves.Saved_Status import *
 from Saves.Saved_Area import *
 from Saves.Saved_Items import *
+import map_level1 as _lvl1
+import map_level2 as _lvl2
+import map_level3 as _lvl3
 
 # Loads Save Files From Previous Play Throughs
 if Loaded:
@@ -442,6 +446,15 @@ def update_screen_game(playing, title):
             camera.blit(thred.ebar, ((camera.get_width()-96), (camera.get_height()-16)))
             camera.blit(thred.ebar, ((camera.get_width() - 96), (camera.get_height() - 16)))
             camera.blit(thred.inv_button.surf, thred.inv_button.rect)
+            # Thread & level HUD
+            try:
+                _tf = pygame.font.Font(None, 16)
+                _ts = _tf.render("Thread:" + str(int(thred.thread)), True, (220, 200, 100))
+                camera.blit(_ts, (2, camera.get_height()-28))
+                _ls = _tf.render("Lvl " + str(current_level) + "/3", True, (180, 160, 80))
+                camera.blit(_ls, (2, camera.get_height()-16))
+            except Exception:
+                pass
         if not playing:
             filter_off = pygame.surface.Surface((camera.get_width(), camera.get_height()))
             filter_off.fill((200, 200, 200))
@@ -619,6 +632,13 @@ class Player(pygame.sprite.Sprite):
         self.inv_button = ""
         self.form = "Solid"
         self.inv = ["Green", "Ball", "Cat_Claw"]
+        # Expansion: thread currency, skills, stat multipliers
+        self.thread = 0
+        self.skills = set()
+        self.dmg_mult = 1.0
+        self.defense_mult = 1.0
+        self.thread_mult = 1.0
+        self.crit_chance = 0.0
 
     # The player equivilant of update
     # based on input and item and armor moves the player entity
@@ -1218,7 +1238,9 @@ class Player(pygame.sprite.Sprite):
     # If player charecters health reaches 0
     # Death process
     def die(self):
-        empty_all()
+        global player_dead
+        player_dead = True
+        self.health = 1  # Prevent repeated die() calls
 
 
 # Attacks from Player Charecter
@@ -1481,6 +1503,30 @@ class Enemies(pygame.sprite.Sprite):
         self.sight = sight
         self.speed = speed
         self.enemy = enemy
+        # Patrol wander state (used when player not in sight)
+        self.patrol_timer = random.randint(0, 60)
+        self.patrol_dx = 0
+        self.patrol_dy = 0
+
+    def patrol_wander(self):
+        self.patrol_timer += 1
+        if self.patrol_timer >= 90:
+            self.patrol_timer = 0
+            angle = random.uniform(0, 6.2832)
+            spd = self.speed * 0.4
+            self.patrol_dx = math.cos(angle) * spd
+            self.patrol_dy = math.sin(angle) * spd
+        dx = int(self.patrol_dx)
+        dy = int(self.patrol_dy)
+        if dx != 0 or dy != 0:
+            self.rect.move_ip(dx, dy)
+            r, c = self.rect.centery // 32, self.rect.centerx // 32
+            r = max(0, min(r, len(Layers.map)-1))
+            c = max(0, min(c, len(Layers.map[0])-1))
+            if Layers.map[r][c] in Layers.walls:
+                self.rect.move_ip(-dx*2, -dy*2)
+                self.patrol_dx = -self.patrol_dx
+                self.patrol_dy = -self.patrol_dy
 
 
 # Attacks from Enemy entities
@@ -1497,7 +1543,8 @@ class EnemyAttacks(Entities):
     # if enemy attack hits player
     def hit(self, entity):
         if entity.form == "Solid":
-            entity.health -= self.damage
+            defense = getattr(entity, 'defense_mult', 1.0)
+            entity.health -= self.damage * defense
 
 
 # Wine Enemy Class
@@ -1705,6 +1752,10 @@ class wine_boi(Enemies):
                                     self.reloadR = 0
                                     self.reload = 0
                                     self.hand[1] = 0
+
+                # Patrol wander when player not in sight
+                if playerVect.length() > self.sight:
+                    self.patrol_wander()
 
                 # If seen move enemy
                 if all(((self.state != 1), (self.state != 2), (self.state != 6), (self.state != 7))):
@@ -2090,6 +2141,11 @@ class wine_boi(Enemies):
 
     # Enemy death process
     def die(self):
+        global thred
+        try:
+            thred.thread += max(1, int(3 * getattr(thred, 'thread_mult', 1.0)))
+        except Exception:
+            pass
         self.item.spawn(self.rect.centerx, self.rect.centery)
         self.kill()
 
@@ -2425,6 +2481,11 @@ class slime_boi(Enemies):
 
     # Slime death process
     def die(self):
+        global thred
+        try:
+            thred.thread += max(1, int(1 * getattr(thred, 'thread_mult', 1.0)))
+        except Exception:
+            pass
         self.item.spawn(self.rect.centerx, self.rect.centery)
         self.kill()
 
@@ -2641,6 +2702,7 @@ class cat_boi(Enemies):
                         self.surf = self.cat[row][(self.step // round(7 / self.speed)) % 4]
                 else:
                     self.surf = self.cat[self.last_row][1]
+                    self.patrol_wander()
                 self.reload += 1
             self.bar = health_bar(True, self.max_health, self.health)
         else:
@@ -2667,6 +2729,11 @@ class cat_boi(Enemies):
 
     # Cat death process
     def die(self):
+        global thred
+        try:
+            thred.thread += max(1, int(2 * getattr(thred, 'thread_mult', 1.0)))
+        except Exception:
+            pass
         self.item.spawn(self.rect.centerx, self.rect.centery)
         self.kill()
 
@@ -2780,10 +2847,8 @@ def empty_all():
     all_blocks.empty()
 
 
-    if saved_loaded:
-        load_save()
-    else:
-        new_file()
+    # Restart is handled externally (see player_dead flag / load_level())
+    pass
 
 # "Main Code"
 if __name__ == "__main__":
@@ -2962,14 +3027,19 @@ if __name__ == "__main__":
 
     # Creates a new save file, overwriting old save file if one was present
     def new_file():
-        global thred
+        global thred, current_level
         thred = Player(80, 80, "A_0", 5, 15, 2, 1, 2.1, 1.3)
         inv_button = Buttons(430, -5, Image.backpack[0], Image.backpack[1])
         thred.inv_button = inv_button
         all_buttons.add(thred.inv_button)
         all_mains.add(thred)
 
-        from map import map as map_grid
+        if current_level == 2:
+            map_grid = _lvl2.map
+        elif current_level == 3:
+            map_grid = _lvl3.map
+        else:
+            map_grid = _lvl1.map
         for row in range(len(map_grid)):
             for column in range(len(map_grid[row])):
                 tile = map_grid[row][column]
@@ -3007,6 +3077,10 @@ if __name__ == "__main__":
                     if tile == "spawn":
                         thred.rect.centerx = column * 32
                         thred.rect.centery = row * 32
+
+        # Track initial enemy count for level-complete detection
+        global initial_enemy_count
+        initial_enemy_count = len(all_enemies)
 
     # Creates Clock for game speed
     clock = pygame.time.Clock()
@@ -3151,6 +3225,12 @@ if __name__ == "__main__":
         global Room
         global screen
         global thred
+        global player_dead
+        global initial_enemy_count
+        global current_level
+
+        enemies_started = initial_enemy_count > 0
+
         # Creates the Rooms Frame Loop
         while Room == 2:
             for event in pygame.event.get():
@@ -3187,6 +3267,18 @@ if __name__ == "__main__":
 
             pressed_keys = pygame.key.get_pressed()
             thred.control(pressed_keys)
+
+            # Check player death
+            if player_dead:
+                player_dead = False
+                game_over_screen()
+                break
+
+            # Check level complete (all enemies cleared)
+            if enemies_started and len(all_enemies) == 0:
+                level_complete_screen()
+                enemies_started = False
+                break
 
             # Clears The Screen
             screen.fill((0, 0, 0))
@@ -3482,6 +3574,359 @@ if __name__ == "__main__":
             # Sets Frame Rate
             clock.tick(60)
 
+
+    # ─────────────────────────────────────────────────────────────────
+    # SKILL TREE data + helpers
+    # ─────────────────────────────────────────────────────────────────
+    SKILL_TREE = [
+        {"id":"vitality_1",  "name":"Vitality I",    "desc":"+5 max HP",          "cost": 3, "needs":None,           "row":0,"col":0},
+        {"id":"vitality_2",  "name":"Vitality II",   "desc":"+5 max HP",          "cost": 6, "needs":"vitality_1",   "row":0,"col":1},
+        {"id":"iron_yarn",   "name":"Iron Yarn",     "desc":"-20% damage taken",  "cost":10, "needs":"vitality_2",   "row":0,"col":2},
+        {"id":"energy_1",    "name":"Energy I",      "desc":"+2 max energy",      "cost": 3, "needs":None,           "row":1,"col":0},
+        {"id":"energy_2",    "name":"Energy II",     "desc":"+3 max energy",      "cost": 6, "needs":"energy_1",     "row":1,"col":1},
+        {"id":"puddle_surge","name":"Puddle Surge",  "desc":"Puddle costs 50% less","cost":10,"needs":"energy_2",    "row":1,"col":2},
+        {"id":"speed_1",     "name":"Quick Feet I",  "desc":"+0.3 speed",         "cost": 4, "needs":None,           "row":2,"col":0},
+        {"id":"speed_2",     "name":"Quick Feet II", "desc":"+0.5 speed",         "cost": 8, "needs":"speed_1",      "row":2,"col":1},
+        {"id":"damage_1",    "name":"Sharpness I",   "desc":"+0.5 attack",        "cost": 4, "needs":None,           "row":3,"col":0},
+        {"id":"damage_2",    "name":"Sharpness II",  "desc":"+0.8 attack",        "cost": 8, "needs":"damage_1",     "row":3,"col":1},
+        {"id":"crit_strike", "name":"Crit Strike",   "desc":"20% crit chance",    "cost":12, "needs":"damage_2",     "row":3,"col":2},
+        {"id":"sight_1",     "name":"Eagle Eye I",   "desc":"+0.3 sight radius",  "cost": 3, "needs":None,           "row":4,"col":0},
+        {"id":"sight_2",     "name":"Eagle Eye II",  "desc":"+0.5 sight radius",  "cost": 6, "needs":"sight_1",      "row":4,"col":1},
+        {"id":"thread_sense","name":"Thread Sense",  "desc":"+50% thread drops",  "cost": 5, "needs":None,           "row":4,"col":2},
+    ]
+
+    def apply_skill(skill_id):
+        global thred
+        if skill_id == "vitality_1" or skill_id == "vitality_2":
+            thred.max_health += 5
+            thred.health = min(thred.health + 5, thred.max_health)
+        elif skill_id == "iron_yarn":
+            thred.defense_mult = getattr(thred, 'defense_mult', 1.0) * 0.8
+        elif skill_id == "energy_1":
+            thred.max_energy += 2
+        elif skill_id == "energy_2":
+            thred.max_energy += 3
+        elif skill_id == "speed_1":
+            thred.speed += 0.3
+        elif skill_id == "speed_2":
+            thred.speed += 0.5
+        elif skill_id == "damage_1":
+            thred.attack += 0.5
+        elif skill_id == "damage_2":
+            thred.attack += 0.8
+        elif skill_id == "crit_strike":
+            thred.crit_chance = 0.2
+        elif skill_id == "sight_1":
+            thred.sight += 0.3
+        elif skill_id == "sight_2":
+            thred.sight += 0.5
+        elif skill_id == "thread_sense":
+            thred.thread_mult = getattr(thred, 'thread_mult', 1.0) + 0.5
+
+    def skill_tree_screen():
+        global Room, screen, thred
+        pygame.font.init()
+        font_title = pygame.font.Font(None, 14)
+        font_sm    = pygame.font.Font(None, 10)
+        font_xs    = pygame.font.Font(None, 9)
+        # Camera is SCREEN_WIDTH/zoom × SCREEN_HEIGHT/zoom = 500×233
+        # Fit 3 cols × 5 rows in that space
+        CELL_W, CELL_H = 148, 30
+        PAD_X, PAD_Y   = 8, 5
+        START_X, START_Y = 10, 48
+
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == QUIT:
+                    Room = 0
+                    return
+                elif event.type == KEYDOWN:
+                    if event.key == K_RETURN or event.key == K_ESCAPE:
+                        waiting = False
+                elif event.type == MOUSEBUTTONDOWN:
+                    mx, my = pygame.mouse.get_pos()
+                    w, h = screen.get_width(), screen.get_height()
+                    cam_w2 = round(SCREEN_WIDTH / Layers.zoom)
+                    cam_h2 = round(SCREEN_HEIGHT / Layers.zoom)
+                    # Map screen mouse → camera coords
+                    scale_x = w / cam_w2
+                    scale_y = h / cam_h2
+                    gmx = mx / scale_x; gmy = my / scale_y
+                    # Continue button area (in camera space)
+                    btn_cx2 = cam_w2 - 45; btn_cy2 = cam_h2 - 12
+                    if (btn_cx2-40) <= gmx <= (btn_cx2+42) and (btn_cy2-9) <= gmy <= (btn_cy2+9):
+                        waiting = False
+                        continue
+                    for sk in SKILL_TREE:
+                        cx = START_X + sk["col"] * (CELL_W + PAD_X)
+                        cy = START_Y + sk["row"] * (CELL_H + PAD_Y)
+                        if cx <= gmx <= cx + CELL_W and cy <= gmy <= cy + CELL_H:
+                            purchased = getattr(thred, 'skills', set())
+                            needs_met  = sk["needs"] is None or sk["needs"] in purchased
+                            can_afford = thred.thread >= sk["cost"]
+                            not_bought = sk["id"] not in purchased
+                            if needs_met and can_afford and not_bought:
+                                thred.thread -= sk["cost"]
+                                thred.skills.add(sk["id"])
+                                apply_skill(sk["id"])
+
+            sw, sh = screen.get_width(), screen.get_height()
+            # Draw onto a camera-sized surface, then scale up
+            cam_w = round(SCREEN_WIDTH / Layers.zoom)
+            cam_h = round(SCREEN_HEIGHT / Layers.zoom)
+            cam = pygame.surface.Surface((cam_w, cam_h))
+            cam.fill((15, 10, 25))
+
+            # Title
+            t = font_title.render("~~ SKILL TREE ~~  (click to buy, Enter to continue)", True, (220, 200, 100))
+            cam.blit(t, (2, 2))
+            thread_surf = font_sm.render("Thread: " + str(int(thred.thread)) + "   Skills: " + str(len(getattr(thred,'skills',set()))), True, (220,200,100))
+            cam.blit(thread_surf, (2, 14))
+
+            purchased = getattr(thred, 'skills', set())
+
+            # Connection lines
+            for sk in SKILL_TREE:
+                if sk["needs"]:
+                    parent = next((s for s in SKILL_TREE if s["id"] == sk["needs"]), None)
+                    if parent:
+                        px = START_X + parent["col"] * (CELL_W + PAD_X) + CELL_W
+                        py = START_Y + parent["row"] * (CELL_H + PAD_Y) + CELL_H // 2
+                        cx = START_X + sk["col"] * (CELL_W + PAD_X)
+                        cy = START_Y + sk["row"] * (CELL_H + PAD_Y) + CELL_H // 2
+                        col = (80, 170, 80) if sk["id"] in purchased else (60, 55, 40)
+                        pygame.draw.line(cam, col, (px, py), (cx, cy), 2)
+
+            # Skill nodes
+            mx_raw, my_raw = pygame.mouse.get_pos()
+            gmx = mx_raw * cam_w / sw if sw > 0 else 0
+            gmy = my_raw * cam_h / sh if sh > 0 else 0
+            for sk in SKILL_TREE:
+                x = START_X + sk["col"] * (CELL_W + PAD_X)
+                y = START_Y + sk["row"] * (CELL_H + PAD_Y)
+                bought     = sk["id"] in purchased
+                needs_met  = sk["needs"] is None or sk["needs"] in purchased
+                can_afford = thred.thread >= sk["cost"]
+                if bought:
+                    bg, bd, tc = (30,70,30), (70,180,70), (130,255,130)
+                elif needs_met and can_afford:
+                    bg, bd, tc = (30,30,70), (80,80,200), (180,180,255)
+                elif needs_met:
+                    bg, bd, tc = (50,40,15), (90,70,25), (150,130,70)
+                else:
+                    bg, bd, tc = (25,20,30), (55,45,65), (90,80,100)
+                hovering = x <= gmx <= x+CELL_W and y <= gmy <= y+CELL_H
+                if hovering and not bought and needs_met:
+                    bd = (255,220,60)
+                pygame.draw.rect(cam, bg, (x, y, CELL_W, CELL_H), border_radius=3)
+                pygame.draw.rect(cam, bd, (x, y, CELL_W, CELL_H), 1, border_radius=3)
+                ns = font_sm.render(sk["name"], True, tc)
+                cam.blit(ns, (x+3, y+2))
+                ds = font_xs.render(sk["desc"], True, (160,150,160))
+                cam.blit(ds, (x+3, y+12))
+                if bought:
+                    sts = font_xs.render("LEARNED", True, (70,200,70))
+                elif not needs_met:
+                    sts = font_xs.render("LOCKED", True, (110,95,125))
+                else:
+                    sts = font_xs.render(str(sk["cost"]) + " thread", True, (210,190,90))
+                cam.blit(sts, (x+3, y+21))
+
+            # Continue button (in camera space)
+            btn_cx = cam_w - 45; btn_cy = cam_h - 12
+            pygame.draw.rect(cam, (28,78,28), (btn_cx-40, btn_cy-9, 82, 18), border_radius=4)
+            pygame.draw.rect(cam, (65,168,65), (btn_cx-40, btn_cy-9, 82, 18), 1, border_radius=4)
+            bs = font_sm.render("CONTINUE >>", True, (120,248,120))
+            cam.blit(bs, (btn_cx - bs.get_width()//2, btn_cy - bs.get_height()//2))
+            # Hint text
+            ht = font_xs.render("Click skill to buy | Enter/Esc to continue", True, (80,75,100))
+            cam.blit(ht, (4, cam_h - 9))
+
+            scaled = pygame.transform.scale(cam, (sw, sh))
+            screen.blit(scaled, (0, 0))
+            pygame.display.flip()
+            clock.tick(30)
+
+    def level_complete_screen():
+        global Room, current_level, initial_enemy_count
+        pygame.font.init()
+        font_title = pygame.font.Font(None, 48)
+        font_sub   = pygame.font.Font(None, 30)
+        font_sm    = pygame.font.Font(None, 22)
+        waiting = True
+        level_names = {1: "The Tangled Cavern", 2: "The Wool Labyrinth", 3: "The Spool Chamber"}
+        lname = level_names.get(current_level, "Level " + str(current_level))
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == QUIT:
+                    Room = 0
+                    return
+                elif event.type == KEYDOWN or event.type == MOUSEBUTTONDOWN:
+                    waiting = False
+            sw, sh = screen.get_width(), screen.get_height()
+            screen.fill((10, 30, 10))
+            t = font_title.render("AREA CLEARED!", True, (100,230,100))
+            screen.blit(t, (sw//2 - t.get_width()//2, sh//5))
+            sub = font_sub.render(lname, True, (160,200,160))
+            screen.blit(sub, (sw//2 - sub.get_width()//2, sh//5 + 55))
+            ts = font_sm.render("Thread collected: " + str(int(thred.thread)), True, (220,200,100))
+            screen.blit(ts, (sw//2 - ts.get_width()//2, sh//2 - 20))
+            if current_level < MAX_LEVEL:
+                ps = font_sm.render("Click or press any key to visit the Skill Tree", True, (150,200,150))
+            else:
+                ps = font_sm.render("Click or press any key to continue", True, (150,200,150))
+            screen.blit(ps, (sw//2 - ps.get_width()//2, sh*3//4))
+            pygame.display.flip()
+            clock.tick(30)
+
+        if current_level < MAX_LEVEL:
+            skill_tree_screen()
+            current_level += 1
+            load_level()
+        else:
+            victory_screen()
+            current_level = 1
+            Room = -1
+            all_backgrounds.empty(); all_buttons.empty(); all_items.empty()
+            all_enemies.empty(); all_visuals.empty(); all_cursors.empty()
+            all_attacksa.empty(); all_attacksb.empty(); all_mains.empty()
+            all_text.empty(); all_lights.empty(); all_blocks.empty()
+            all_temps.empty(); all_tempsback.empty(); all_numbers.empty()
+            Layers.map = [[0 for i in range(65)] for j in range(35)]
+            loadscreen()
+
+    def game_over_screen():
+        global Room, current_level, player_dead
+        pygame.font.init()
+        font_title = pygame.font.Font(None, 52)
+        font_sub   = pygame.font.Font(None, 32)
+        font_sm    = pygame.font.Font(None, 24)
+        saved_thread = int(getattr(thred, 'thread', 0))
+        saved_level  = current_level
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == QUIT:
+                    Room = 0
+                    return
+                elif event.type == KEYDOWN:
+                    if event.key == K_RETURN or event.key == K_SPACE or event.key == K_ESCAPE:
+                        waiting = False
+                elif event.type == MOUSEBUTTONDOWN:
+                    waiting = False
+            sw, sh = screen.get_width(), screen.get_height()
+            screen.fill((20, 8, 28))
+            t = font_title.render("THREAD SEVERED", True, (200,50,50))
+            screen.blit(t, (sw//2 - t.get_width()//2, sh//5))
+            sub = font_sub.render("Thred has unraveled...", True, (170,100,100))
+            screen.blit(sub, (sw//2 - sub.get_width()//2, sh//5 + 65))
+            lt = font_sm.render("Reached Level " + str(saved_level) + " of 3", True, (190,190,140))
+            screen.blit(lt, (sw//2 - lt.get_width()//2, sh//2 - 20))
+            tt = font_sm.render("Thread Collected: " + str(saved_thread), True, (220,200,100))
+            screen.blit(tt, (sw//2 - tt.get_width()//2, sh//2 + 15))
+            ps = font_sm.render("Press ENTER / click to return to menu", True, (140,140,170))
+            screen.blit(ps, (sw//2 - ps.get_width()//2, sh*3//4))
+            pygame.display.flip()
+            clock.tick(30)
+        # Reset and go back to title
+        current_level = 1
+        player_dead   = False
+        all_backgrounds.empty(); all_buttons.empty(); all_items.empty()
+        all_enemies.empty(); all_visuals.empty(); all_cursors.empty()
+        all_attacksa.empty(); all_attacksb.empty(); all_mains.empty()
+        all_text.empty(); all_lights.empty(); all_blocks.empty()
+        all_temps.empty(); all_tempsback.empty(); all_numbers.empty()
+        Layers.map = [[0 for i in range(65)] for j in range(35)]
+        Room = -1
+        loadscreen()
+
+    def victory_screen():
+        global screen
+        pygame.font.init()
+        font_title = pygame.font.Font(None, 64)
+        font_sub   = pygame.font.Font(None, 34)
+        font_sm    = pygame.font.Font(None, 26)
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == QUIT:
+                    return
+                elif event.type == KEYDOWN or event.type == MOUSEBUTTONDOWN:
+                    waiting = False
+            sw, sh = screen.get_width(), screen.get_height()
+            screen.fill((10, 10, 40))
+            # Draw starfield
+            for i in range(60):
+                rx = (i * 37 + 7) % sw
+                ry = (i * 53 + 11) % sh
+                pygame.draw.circle(screen, (180 + (i % 3)*25, 180, 255 - (i % 4)*15), (rx, ry), 1 + (i%3))
+            t = font_title.render("VICTORY!", True, (220, 180, 50))
+            screen.blit(t, (sw//2 - t.get_width()//2, sh//6))
+            sub = font_sub.render("The Wine King is defeated!", True, (200, 200, 180))
+            screen.blit(sub, (sw//2 - sub.get_width()//2, sh//6 + 70))
+            st = font_sm.render("Thred has reclaimed the Spool of Origins.", True, (160,160,220))
+            screen.blit(st, (sw//2 - st.get_width()//2, sh//6 + 110))
+            ts = font_sm.render("Total Thread: " + str(int(getattr(thred,'thread',0))), True, (220,200,100))
+            screen.blit(ts, (sw//2 - ts.get_width()//2, sh//2 + 10))
+            sk = font_sm.render("Skills Learned: " + str(len(getattr(thred,'skills',set()))), True, (140,220,140))
+            screen.blit(sk, (sw//2 - sk.get_width()//2, sh//2 + 45))
+            ps = font_sm.render("Click or press any key to return to menu", True, (150,150,190))
+            screen.blit(ps, (sw//2 - ps.get_width()//2, sh*3//4 + 20))
+            pygame.display.flip()
+            clock.tick(30)
+
+    def load_level():
+        global thred, initial_enemy_count, player_dead, Room
+        player_dead = False
+        # Carry over player progression
+        saved_thread  = int(getattr(thred, 'thread', 0))
+        saved_skills  = set(getattr(thred, 'skills', set()))
+        saved_hp      = thred.health
+        saved_mhp     = thred.max_health
+        saved_me      = thred.max_energy
+        saved_e       = thred.energy
+        saved_atk     = thred.attack
+        saved_spd     = thred.speed
+        saved_sight   = thred.sight
+        saved_armor   = thred.armor
+        saved_hand    = thred.hand
+        saved_inv     = list(thred.inv)
+        saved_def     = getattr(thred, 'defense_mult', 1.0)
+        saved_tmult   = getattr(thred, 'thread_mult',  1.0)
+        saved_crit    = getattr(thred, 'crit_chance',  0.0)
+        # Wipe everything
+        try: thred.kill()
+        except Exception: pass
+        all_backgrounds.empty(); all_buttons.empty(); all_items.empty()
+        all_enemies.empty(); all_visuals.empty(); all_cursors.empty()
+        all_attacksa.empty(); all_attacksb.empty(); all_mains.empty()
+        all_text.empty(); all_lights.empty(); all_blocks.empty()
+        all_temps.empty(); all_tempsback.empty(); all_numbers.empty()
+        Layers.map = [[0 for i in range(65)] for j in range(35)]
+        Layers.Map = pygame.surface.Surface((65*32, 35*32))
+        Layers.Map.set_colorkey((100,90,50))
+        Layers.Light_Layer = pygame.surface.Surface((65*32, 35*32))
+        # Load new level (creates fresh thred)
+        new_file()
+        # Restore carried-over stats
+        thred.thread        = saved_thread
+        thred.skills        = saved_skills
+        thred.health        = min(saved_hp, thred.max_health)
+        thred.max_health    = saved_mhp
+        thred.max_energy    = saved_me
+        thred.energy        = min(saved_e, saved_me)
+        thred.attack        = saved_atk
+        thred.speed         = saved_spd
+        thred.sight         = saved_sight
+        thred.armor         = saved_armor
+        thred.hand          = saved_hand
+        thred.inv           = saved_inv
+        thred.defense_mult  = saved_def
+        thred.thread_mult   = saved_tmult
+        thred.crit_chance   = saved_crit
+        initial_enemy_count = len(all_enemies)
+        Room = 2
 
     # Creates Main Loop for the Game
     # Uses Room Codes To Dictate Room Loops
