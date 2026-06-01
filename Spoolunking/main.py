@@ -405,101 +405,94 @@ def update_screen_game(playing, title):
     :type playing: Bool
     :type title: Bool
     """
-    camera = pygame.surface.Surface((SCREEN_WIDTH // Layers.zoom, SCREEN_HEIGHT // Layers.zoom))
+    cam_w = SCREEN_WIDTH // Layers.zoom   # 426
+    cam_h = SCREEN_HEIGHT // Layers.zoom  # 240
+    camera = pygame.surface.Surface((cam_w, cam_h))
     camera.fill((250, 250, 250))
+
+    # Convert mouse position from screen space to camera space (no rect mutation)
+    mx, my = pygame.mouse.get_pos()
+    cam_mx = mx * cam_w / SCREEN_WIDTH
+    cam_my = my * cam_h / SCREEN_HEIGHT
+
     if playing:
         update_map()
-        button = thred.inv_button
-        button.rect.height = thred.inv_button.rect.height * (screen.get_height()/(SCREEN_HEIGHT/Layers.zoom))
-        button.rect.width = thred.inv_button.rect.width * (screen.get_width()/(SCREEN_WIDTH/Layers.zoom))
-        button.rect.top = thred.inv_button.rect.top*(screen.get_height()/(SCREEN_HEIGHT/Layers.zoom))
-        button.rect.left = thred.inv_button.rect.left*(screen.get_width()/(SCREEN_WIDTH/Layers.zoom))
         light_up()
-        if button.rect.collidepoint(pygame.mouse.get_pos()):
+        if thred.inv_button.rect.collidepoint(cam_mx, cam_my):
             thred.inv_button.switch()
         else:
             thred.inv_button.switch_back()
 
     if not title:
-        if thred.rect.left < camera.get_width()/2:
-            cam_x = camera.get_width()/2
-        elif thred.rect.left > Layers.Map.get_width()-camera.get_width()/2:
-            cam_x = Layers.Map.get_width()-camera.get_width()/2
+        if thred.rect.left < cam_w / 2:
+            cam_x = cam_w / 2
+        elif thred.rect.left > Layers.Map.get_width() - cam_w / 2:
+            cam_x = Layers.Map.get_width() - cam_w / 2
         else:
             cam_x = thred.rect.left
 
-        if thred.rect.top < camera.get_height()/2:
-            cam_y = camera.get_height()/2
-        elif thred.rect.top > Layers.Map.get_height()-camera.get_height()/2:
-            cam_y = Layers.Map.get_height()-camera.get_height()/2
+        if thred.rect.top < cam_h / 2:
+            cam_y = cam_h / 2
+        elif thred.rect.top > Layers.Map.get_height() - cam_h / 2:
+            cam_y = Layers.Map.get_height() - cam_h / 2
         else:
             cam_y = thred.rect.top
 
-        x_rel = (800-cam_x) % 800
-        x_part2 = x_rel - 800 if x_rel > 0 else x_rel + 800
-        y_rel = (800-cam_y) % 750
-        y_part2 = y_rel - 750 if y_rel > 0 else y_rel + 750
+        # Tile the floor texture in camera space
+        fw, fh = Layers.floor.get_size()
+        fx = int(-(cam_x % fw))
+        fy = int(-(cam_y % fh))
+        x = fx
+        while x < cam_w:
+            y = fy
+            while y < cam_h:
+                camera.blit(Layers.floor, (x, y))
+                y += fh
+            x += fw
 
-        Layers.floor_layer.blit(Layers.floor, (x_rel, y_rel))
-        Layers.floor_layer.blit(Layers.floor, (x_rel, y_part2))
-        Layers.floor_layer.blit(Layers.floor, (x_part2, y_part2))
-        Layers.floor_layer.blit(Layers.floor, (x_part2, y_rel))
-        camera.blit(Layers.floor_layer, (0,0))
-        camera.blit(Layers.Map, (camera.get_width()/2-cam_x, camera.get_height()/2-cam_y))
+        camera.blit(Layers.Map, (cam_w / 2 - cam_x, cam_h / 2 - cam_y))
         if playing:
-            camera.blit(Layers.Light_Layer, (camera.get_width() / 2 - cam_x, camera.get_height() / 2 - cam_y),
+            camera.blit(Layers.Light_Layer, (cam_w / 2 - cam_x, cam_h / 2 - cam_y),
                         special_flags=pygame.BLEND_RGBA_SUB)
-            camera.blit(thred.hbar, ((camera.get_width()-96), (camera.get_height()-28)))
-            camera.blit(thred.ebar, ((camera.get_width()-96), (camera.get_height()-16)))
-            camera.blit(thred.ebar, ((camera.get_width() - 96), (camera.get_height() - 16)))
+            camera.blit(thred.hbar, (cam_w - 96, cam_h - 28))
+            camera.blit(thred.ebar, (cam_w - 96, cam_h - 16))
             camera.blit(thred.inv_button.surf, thred.inv_button.rect)
-            # Thread & level HUD
             try:
                 _tf = pygame.font.Font(None, 16)
                 _ts = _tf.render("Thread:" + str(int(thred.thread)), True, (220, 200, 100))
-                camera.blit(_ts, (2, camera.get_height()-28))
+                camera.blit(_ts, (2, cam_h - 28))
                 _ls = _tf.render("Lvl " + str(current_level) + "/3", True, (180, 160, 80))
-                camera.blit(_ls, (2, camera.get_height()-16))
+                camera.blit(_ls, (2, cam_h - 16))
             except Exception:
                 pass
         if not playing:
-            filter_off = pygame.surface.Surface((camera.get_width(), camera.get_height()))
+            filter_off = pygame.surface.Surface((cam_w, cam_h))
             filter_off.fill((200, 200, 200))
-            filter_on = pygame.surface.Surface((camera.get_width()*3/4, camera.get_height()*3/4))
+            filter_on = pygame.surface.Surface((int(cam_w * 3 / 4), int(cam_h * 3 / 4)))
             filter_on.fill((200, 200, 200))
             camera.blit(filter_off, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
-            camera.blit(filter_on, (camera.get_width() / 8, camera.get_height() / 8))
+            camera.blit(filter_on, (cam_w / 8, cam_h / 8))
             for things in all_temps:
-                button = things
-                button.rect.height = things.rect.height * (screen.get_height() / (SCREEN_HEIGHT / Layers.zoom))
-                button.rect.width = things.rect.width * (screen.get_width() / (SCREEN_WIDTH / Layers.zoom))
-                button.rect.top = things.rect.top * (screen.get_height() / (SCREEN_HEIGHT / Layers.zoom))
-                button.rect.left = things.rect.left * (screen.get_width() / (SCREEN_WIDTH / Layers.zoom))
-                if button.rect.collidepoint(pygame.mouse.get_pos()):
+                if things.rect.collidepoint(cam_mx, cam_my):
                     things.switch()
                 else:
                     things.switch_back()
                 camera.blit(things.surf, things.rect)
     if title:
-            for things in all_tempsback:
-                camera.blit(things.surf, things.rect)
+        for things in all_tempsback:
+            camera.blit(things.surf, things.rect)
+        for things in all_temps:
+            if things.rect.collidepoint(cam_mx, cam_my):
+                things.switch()
+            else:
+                things.switch_back()
+            camera.blit(things.surf, things.rect)
+        for numbers in all_numbers:
+            numbers.surf = pygame.transform.scale(numbers.surf, (12, 12))
+            camera.blit(numbers.surf, numbers.rect)
 
-            for things in all_temps:
-                button = things
-                button.rect.height = things.rect.height * (screen.get_height() / (SCREEN_HEIGHT / Layers.zoom))
-                button.rect.width = things.rect.width * (screen.get_width() / (SCREEN_WIDTH / Layers.zoom))
-                button.rect.top = things.rect.top * (screen.get_height() / (SCREEN_HEIGHT / Layers.zoom))
-                button.rect.left = things.rect.left * (screen.get_width() / (SCREEN_WIDTH / Layers.zoom))
-                if button.rect.collidepoint(pygame.mouse.get_pos()):
-                    things.switch()
-                else:
-                    things.switch_back()
-                camera.blit(things.surf, things.rect)
-            for numbers in all_numbers:
-                numbers.surf = pygame.transform.scale(numbers.surf, (12, 12))
-                camera.blit(numbers.surf, numbers.rect)
-
-    camera = pygame.transform.scale(camera, (screen.get_width(), screen.get_height()))
+    # Scale to fixed logical resolution — never use screen.get_size() which can change
+    camera = pygame.transform.scale(camera, (SCREEN_WIDTH, SCREEN_HEIGHT))
     screen.blit(camera, (0, 0))
 
 
@@ -3129,9 +3122,6 @@ if __name__ == "__main__":
                         Room = 0
                         break
 
-                elif event.type == pygame.VIDEORESIZE:
-                    # Resizes Screen If User Tries To Change Screen Size
-                    screen = pygame.display.set_mode((event.w, event.h), RESIZABLE)
 
             # Clears The Screen
             screen.fill((0, 0, 0))
@@ -3186,9 +3176,6 @@ if __name__ == "__main__":
                         Room = 2
                         break
 
-                elif event.type == pygame.VIDEORESIZE:
-                    # Resizes Screen If User Tries To Change Screen Size
-                    screen = pygame.display.set_mode((event.w, event.h), RESIZABLE)
 
             # Clears The Screen
             screen.fill((0, 0, 0))
@@ -3544,9 +3531,6 @@ if __name__ == "__main__":
                             else:
                                 pass
 
-                elif event.type == pygame.VIDEORESIZE:
-                    # Resizes Screen If User Tries To Change Screen Size
-                    screen = pygame.display.set_mode((event.w, event.h), RESIZABLE)
 
             # Clears The Screen
             screen.fill((0, 0, 0))
